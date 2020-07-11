@@ -9,12 +9,13 @@ import (
 )
 
 type UDPOutput struct {
-	udpServer     string
-	udpServerPort int
-	queue         chan string
-	udpConn       *net.UDPConn
-	waitGroup     sync.WaitGroup
-	sendMeter     *metrics.Meter
+	udpServer         string
+	udpServerPort     int
+	queue             chan string
+	udpConn           *net.UDPConn
+	waitGroup         sync.WaitGroup
+	sendMeter         *metrics.Meter
+	recordTotalMetric *metrics.Counter
 }
 
 func NewUDPOutput(udpServer string, udpServerPort int, queue chan string, metricRegistry *metrics.MetricRegistry, tunnelName string) *UDPOutput {
@@ -26,6 +27,7 @@ func NewUDPOutput(udpServer string, udpServerPort int, queue chan string, metric
 	sendMeter := metrics.NewMeter(tunnelName + "-updoutput-rate")
 	metricRegistry.RegisterMetric(sendMeter)
 	output.sendMeter = sendMeter
+	output.recordTotalMetric = metricRegistry.GetCounter(tunnelName + "-output-record-total")
 	return output
 }
 
@@ -56,6 +58,7 @@ func (output *UDPOutput) Process() {
 			return
 		}
 		output.sendMeter.Update(1)
+		output.recordTotalMetric.Incr(1)
 	}
 }
 

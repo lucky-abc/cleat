@@ -33,6 +33,16 @@ func (s *FileLogSource) Start() {
 		logger.Loggers().Error("no file path in config file")
 		return
 	}
+	fileReadMeter := metrics.NewMeter("fileread-rate")
+	s.metricRegistry.RegisterMetric(fileReadMeter)
+
+	dirReadMeter := metrics.NewMeter("directoryread-rate")
+	fileNumMetric := metrics.NewCounter("directory-filenum")
+	recordNumMetric := metrics.NewCounter("filelog-record-total")
+	s.metricRegistry.RegisterMetric(recordNumMetric)
+	s.metricRegistry.RegisterMetric(dirReadMeter)
+	s.metricRegistry.RegisterMetric(fileNumMetric)
+
 	for _, pathInfo := range paths {
 		pathMap, ok := pathInfo.(map[interface{}]interface{})
 		if !ok {

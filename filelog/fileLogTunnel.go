@@ -14,11 +14,19 @@ type FilelogTunnel struct {
 }
 
 func NewFilelogTunnel(ck *record.RecordPoint, metricRegistry *metrics.MetricRegistry) *FilelogTunnel {
+	var tunnelName = "filelog"
 	q := make(chan string, 1024)
+	metricGauge := metrics.NewGauge("filelog-channal-size", func() int64 {
+		return int64(len(q))
+	})
+	metricRegistry.RegisterMetric(metricGauge)
+	outputRecordTotalMetric := metrics.NewCounter(tunnelName + "-output-record-total")
+	metricRegistry.RegisterMetric(outputRecordTotalMetric)
+
 	s := NewFileLogSource(q, ck, metricRegistry)
 	udpServerIP := config.Config().GetString("output.udp.serverIP")
 	udpServerPort := config.Config().GetInt("output.udp.serverPort")
-	o := output.NewUDPOutput(udpServerIP, udpServerPort, q, metricRegistry, "filelog")
+	o := output.NewUDPOutput(udpServerIP, udpServerPort, q, metricRegistry, tunnelName)
 
 	tunnel := &FilelogTunnel{
 		queue: q,
@@ -27,11 +35,6 @@ func NewFilelogTunnel(ck *record.RecordPoint, metricRegistry *metrics.MetricRegi
 			Output: o,
 		},
 	}
-
-	metricGauge := metrics.NewGauge("filelog-channal-size", func() int64 {
-		return int64(len(q))
-	})
-	metricRegistry.RegisterMetric(metricGauge)
 	return tunnel
 }
 

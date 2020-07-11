@@ -19,6 +19,9 @@ func NewWinLogSource(c chan string, ck *record.RecordPoint, metricRegistry *metr
 		logger.Loggers().Errorf("no window event channel")
 		return nil
 	}
+	recordNumMetric := metrics.NewCounter("windowevent-record-total")
+	metricRegistry.RegisterMetric(recordNumMetric)
+
 	windowLogs := make([]*WindowsLog, len(eventNames))
 	for i, eventname := range eventNames {
 		l := NewWindowsLog(eventname, c, ck, metricRegistry)

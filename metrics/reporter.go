@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"bytes"
 	"fmt"
 	"go.uber.org/zap"
 	"reflect"
@@ -18,6 +19,7 @@ type LogFileReporter struct {
 	reportDuration time.Duration
 	logger         *zap.Logger
 	tiker          *time.Ticker
+	printBuffer    bytes.Buffer
 }
 
 func NewLogFileReporter(logger *zap.Logger, mr *MetricRegistry, duration int) *LogFileReporter {
@@ -58,24 +60,25 @@ func (lfr *LogFileReporter) report() {
 			lfr.reportInfoSheet(name, metric.(*InfoSheet))
 		}
 	}
+	lfr.logger.Info(lfr.printBuffer.String())
+	lfr.printBuffer.Reset()
 }
 
 func (lfr *LogFileReporter) reportGauge(name string, metric *Gauge) {
-	lfr.logger.Sugar().Infof("Gauge-(%s): %d", name, metric.Value())
+	lfr.printBuffer.WriteString(fmt.Sprintf("\nGauge-(%s): %d", name, metric.Value()))
 }
 func (lfr *LogFileReporter) reportMeter(name string, metric *Meter) {
-	lfr.logger.Sugar().Infof("Meter-(%s): %d /sec", name, metric.Value())
+	lfr.printBuffer.WriteString(fmt.Sprintf("\nMeter-(%s): %d /sec", name, metric.Value()))
 }
 func (lfr *LogFileReporter) reportCounter(name string, metric *Counter) {
-	lfr.logger.Sugar().Infof("Meter-(%s): %d", name, metric.Value())
+	lfr.printBuffer.WriteString(fmt.Sprintf("\nCounter-(%s): %d", name, metric.Value()))
 }
 func (lfr *LogFileReporter) reportInfoSheet(name string, metric *InfoSheet) {
-	str := fmt.Sprintf("InfoSheet-(%s): ", name)
+	lfr.printBuffer.WriteString(fmt.Sprintf("\nInfoSheet-(%s): ", name))
 	metric.Info().Range(func(key interface{}, value interface{}) bool {
-		str += fmt.Sprintf("{%s: %v}  ", key, value)
+		lfr.printBuffer.WriteString(fmt.Sprintf("\n\t{%s: %v}  ", key, value))
 		return true
 	})
-	lfr.logger.Sugar().Info(str)
 }
 
 func (lfr *LogFileReporter) Stop() {

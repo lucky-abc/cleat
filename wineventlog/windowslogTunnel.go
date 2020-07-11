@@ -12,7 +12,8 @@ import (
 
 type WindowslogTunnel struct {
 	tunnel.TunnelModel
-	queue chan string
+	queue      chan string
+	tunnelName string
 }
 
 func NewWindowslogTunnel(ck *record.RecordPoint, metricRegistry *metrics.MetricRegistry) *WindowslogTunnel {
@@ -21,22 +22,29 @@ func NewWindowslogTunnel(ck *record.RecordPoint, metricRegistry *metrics.MetricR
 		logger.Loggers().Warn("Windows API is not supported on the current platform")
 		return nil
 	}
+	var tunnelName = "windowevent"
 	q := make(chan string, 1024)
+
+	metricGauge := metrics.NewGauge("windowevent-channal-size", func() int64 {
+		return int64(len(q))
+	})
+	metricRegistry.RegisterMetric(metricGauge)
+	outputRecordTotalMetric := metrics.NewCounter(tunnelName + "-output-record-total")
+	metricRegistry.RegisterMetric(outputRecordTotalMetric)
+
 	winlogSource := NewWinLogSource(q, ck, metricRegistry)
 	udpServerIP := config.Config().GetString("output.udp.serverIP")
 	udpServerPort := config.Config().GetInt("output.udp.serverPort")
-	udpOutput := output.NewUDPOutput(udpServerIP, udpServerPort, q, metricRegistry, "window")
+	udpOutput := output.NewUDPOutput(udpServerIP, udpServerPort, q, metricRegistry, tunnelName)
+
 	tunnel := &WindowslogTunnel{
 		TunnelModel: tunnel.TunnelModel{
 			Source: winlogSource,
 			Output: udpOutput,
 		},
-		queue: q,
+		queue:      q,
+		tunnelName: tunnelName,
 	}
-	metricGauge := metrics.NewGauge("windowevent-channal-size", func() int64 {
-		return int64(len(q))
-	})
-	metricRegistry.RegisterMetric(metricGauge)
 	return tunnel
 }
 

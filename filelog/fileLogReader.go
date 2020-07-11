@@ -39,14 +39,15 @@ func NewMessageDecoder(charset string) (decoder *encoding.Decoder) {
 }
 
 type FileLogReader struct {
-	filePath      string
-	ck            *record.RecordPoint
-	queue         chan string
-	cancelContext context.Context
-	cancelFun     func()
-	decoder       *encoding.Decoder
-	readFlag      int32 //0:读取未执行，1：正在读取
-	readMeter     *metrics.Meter
+	filePath         string
+	ck               *record.RecordPoint
+	queue            chan string
+	cancelContext    context.Context
+	cancelFun        func()
+	decoder          *encoding.Decoder
+	readFlag         int32 //0:读取未执行，1：正在读取
+	readMeter        *metrics.Meter
+	recorTotalMetric *metrics.Counter
 }
 
 func CreateFileLogReader(path string, charset string, ck *record.RecordPoint, queue chan string, metricRegistry *metrics.MetricRegistry) *FileLogReader {
@@ -61,9 +62,8 @@ func CreateFileLogReader(path string, charset string, ck *record.RecordPoint, qu
 	decoder := NewMessageDecoder(charset)
 	r.decoder = decoder
 
-	readMeter := metrics.NewMeter("fileread-rate")
-	metricRegistry.RegisterMetric(readMeter)
-	r.readMeter = readMeter
+	r.readMeter = metricRegistry.GetMeter("fileread-rate")
+	r.recorTotalMetric = metricRegistry.GetCounter("file-record-total")
 	return r
 }
 
@@ -111,6 +111,7 @@ func (fr *FileLogReader) Read() {
 			select {
 			case fr.queue <- msg:
 				fr.readMeter.Update(1)
+				fr.recorTotalMetric.Incr(1)
 				fr.ck.SetCheckpoint(fmt.Sprintf(recordpointFileLogTemplate, file.Name()), offset)
 				break Lbl
 			case <-fr.cancelContext.Done():

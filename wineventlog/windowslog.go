@@ -42,6 +42,7 @@ type WindowsLog struct {
 	ck            *record.RecordPoint
 	runFlag       int32
 	metricMeter   *metrics.Meter
+	recorCounter  *metrics.Counter
 }
 
 func NewWindowsLog(logName string, queue chan string, ck *record.RecordPoint, metricRegistry *metrics.MetricRegistry) *WindowsLog {
@@ -53,12 +54,13 @@ func NewWindowsLog(logName string, queue chan string, ck *record.RecordPoint, me
 		ck:        ck,
 		runFlag:   0,
 	}
-	metricMeter := metrics.NewMeter("windowevent-read-rate")
+	metricMeter := metrics.NewMeter("windowevent[" + logName + "]-read-rate")
 	metricRegistry.RegisterMetric(metricMeter)
 	context, cancelf := context.WithCancel(context.Background())
 	l.cancelContext = context
 	l.cancelFun = cancelf
 	l.metricMeter = metricMeter
+	l.recorCounter = metricRegistry.GetCounter("windowevent-record-total")
 	return l
 }
 
@@ -116,7 +118,6 @@ func (log *WindowsLog) Read() {
 	var numRead uint32
 	for {
 		err := wineventapi.EvtNext(log.eventHandle, uint32(len(eventHandles)), &eventHandles[0], 0, 0, &numRead)
-		time.Sleep(time.Second *2)
 		if atomic.LoadInt32(&log.runFlag) == 0 {
 			logger.Loggers().Info("window event read over")
 			return
@@ -124,6 +125,7 @@ func (log *WindowsLog) Read() {
 		if err != nil {
 			if err == ERROR_INVALID_OPERATION && numRead == 0 || err == ERROR_NO_MORE_ITEMS {
 				logger.Loggers().Warn("windows event has no more record, sleep a little")
+				time.Sleep(time.Second * 3)
 				continue
 			}
 			logger.Loggers().Errorf("windows event read next fail:%v", err)
@@ -177,6 +179,7 @@ func (log *WindowsLog) eventlogRender(eventHandles []uintptr) error {
 			case log.queue <- xmlEvent:
 				log.RecordNumber = eventRecordID
 				log.metricMeter.Update(1)
+				log.recorCounter.Incr(1)
 				log.ck.SetCheckpoint(fmt.Sprintf(checkpointTemplate, log.LogName), eventRecordID)
 				break lfor
 			}

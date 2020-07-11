@@ -20,16 +20,17 @@ import (
 const recordpointDirLogTemplate = "dirlog-%s"
 
 type DirReader struct {
-	dirPath       string
-	ck            *record.RecordPoint
-	queue         chan string
-	cancelContext context.Context
-	cancelFun     func()
-	decoder       *encoding.Decoder
-	readFlag      int32 //0:读取未执行，1：正在读取
-	waitGroup     sync.WaitGroup
-	readMeter     *metrics.Meter
-	fileNumMetric *metrics.Counter
+	dirPath          string
+	ck               *record.RecordPoint
+	queue            chan string
+	cancelContext    context.Context
+	cancelFun        func()
+	decoder          *encoding.Decoder
+	readFlag         int32 //0:读取未执行，1：正在读取
+	waitGroup        sync.WaitGroup
+	readMeter        *metrics.Meter
+	fileNumMetric    *metrics.Counter
+	recorTotalMetric *metrics.Counter
 }
 
 func CreateDirReader(path string, charset string, ck *record.RecordPoint, queue chan string, metricRegistry *metrics.MetricRegistry) *DirReader {
@@ -44,12 +45,9 @@ func CreateDirReader(path string, charset string, ck *record.RecordPoint, queue 
 	decoder := NewMessageDecoder(charset)
 	r.decoder = decoder
 
-	readMeter := metrics.NewMeter("directoryread-rate")
-	fileNumMetric := metrics.NewCounter("directory-filenum")
-	metricRegistry.RegisterMetric(readMeter)
-	metricRegistry.RegisterMetric(fileNumMetric)
-	r.readMeter = readMeter
-	r.fileNumMetric = fileNumMetric
+	r.readMeter = metricRegistry.GetMeter("directoryread-rate")
+	r.fileNumMetric = metricRegistry.GetCounter("directory-filenum")
+	r.recorTotalMetric = metricRegistry.GetCounter("file-record-total")
 	return r
 }
 
@@ -141,6 +139,7 @@ func (dr *DirReader) Read() {
 				select {
 				case dr.queue <- msg:
 					dr.readMeter.Update(1)
+					dr.recorTotalMetric.Incr(1)
 					dr.ck.SetCheckpoint(fmt.Sprintf(recordpointDirLogTemplate, fileAbsPath), offset)
 					break Lbl
 				case <-dr.cancelContext.Done():
