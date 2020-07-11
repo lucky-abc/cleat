@@ -3,6 +3,7 @@ package wineventlog
 import (
 	"github.com/lucky-abc/cleat/config"
 	"github.com/lucky-abc/cleat/logger"
+	"github.com/lucky-abc/cleat/metrics"
 	"github.com/lucky-abc/cleat/record"
 )
 
@@ -11,7 +12,7 @@ type WinLogSource struct {
 	windowsLogs []*WindowsLog
 }
 
-func NewWinLogSource(c chan string, ck *record.RecordPoint) *WinLogSource {
+func NewWinLogSource(c chan string, ck *record.RecordPoint, metricRegistry *metrics.MetricRegistry) *WinLogSource {
 	eventNames := config.Config().GetStringSlice("windows.event.eventname")
 	logger.Loggers().Infof("window event channel: %v", eventNames)
 	if len(eventNames) == 0 {
@@ -20,7 +21,7 @@ func NewWinLogSource(c chan string, ck *record.RecordPoint) *WinLogSource {
 	}
 	windowLogs := make([]*WindowsLog, len(eventNames))
 	for i, eventname := range eventNames {
-		l := NewWindowsLog(eventname, c, ck)
+		l := NewWindowsLog(eventname, c, ck, metricRegistry)
 		windowLogs[i] = l
 	}
 	s := &WinLogSource{

@@ -3,23 +3,26 @@ package filelog
 import (
 	"github.com/lucky-abc/cleat/config"
 	"github.com/lucky-abc/cleat/logger"
+	"github.com/lucky-abc/cleat/metrics"
 	"github.com/lucky-abc/cleat/record"
 	"os"
 	"time"
 )
 
 type FileLogSource struct {
-	logChan     chan string
-	ck          *record.RecordPoint
-	fileReaders []FileReader
-	timeTicker  *time.Ticker
+	logChan        chan string
+	ck             *record.RecordPoint
+	fileReaders    []FileReader
+	timeTicker     *time.Ticker
+	metricRegistry *metrics.MetricRegistry
 }
 
-func NewFileLogSource(c chan string, ck *record.RecordPoint) *FileLogSource {
+func NewFileLogSource(c chan string, ck *record.RecordPoint, metricRegistry *metrics.MetricRegistry) *FileLogSource {
 	s := &FileLogSource{
-		logChan:     c,
-		ck:          ck,
-		fileReaders: make([]FileReader, 0),
+		logChan:        c,
+		ck:             ck,
+		fileReaders:    make([]FileReader, 0),
+		metricRegistry: metricRegistry,
 	}
 	return s
 }
@@ -49,9 +52,9 @@ func (s *FileLogSource) Start() {
 		}
 		var fileReader FileReader
 		if finfo.IsDir() {
-			fileReader = CreateDirReader(path, charset, s.ck, s.logChan)
+			fileReader = CreateDirReader(path, charset, s.ck, s.logChan, s.metricRegistry)
 		} else {
-			fileReader = CreateFileLogReader(path, charset, s.ck, s.logChan)
+			fileReader = CreateFileLogReader(path, charset, s.ck, s.logChan, s.metricRegistry)
 		}
 		s.fileReaders = append(s.fileReaders, fileReader)
 	}

@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/lucky-abc/cleat/logger"
+	"github.com/lucky-abc/cleat/metrics"
 	"github.com/lucky-abc/cleat/record"
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/simplifiedchinese"
@@ -45,9 +46,10 @@ type FileLogReader struct {
 	cancelFun     func()
 	decoder       *encoding.Decoder
 	readFlag      int32 //0:读取未执行，1：正在读取
+	readMeter     *metrics.Meter
 }
 
-func CreateFileLogReader(path string, charset string, ck *record.RecordPoint, queue chan string) *FileLogReader {
+func CreateFileLogReader(path string, charset string, ck *record.RecordPoint, queue chan string, metricRegistry *metrics.MetricRegistry) *FileLogReader {
 	r := &FileLogReader{
 		filePath: path,
 		ck:       ck,
@@ -58,6 +60,10 @@ func CreateFileLogReader(path string, charset string, ck *record.RecordPoint, qu
 	r.cancelFun = cancelf
 	decoder := NewMessageDecoder(charset)
 	r.decoder = decoder
+
+	readMeter := metrics.NewMeter("fileread-rate")
+	metricRegistry.RegisterMetric(readMeter)
+	r.readMeter = readMeter
 	return r
 }
 
@@ -104,6 +110,7 @@ func (fr *FileLogReader) Read() {
 		for {
 			select {
 			case fr.queue <- msg:
+				fr.readMeter.Update(1)
 				fr.ck.SetCheckpoint(fmt.Sprintf(recordpointFileLogTemplate, file.Name()), offset)
 				break Lbl
 			case <-fr.cancelContext.Done():

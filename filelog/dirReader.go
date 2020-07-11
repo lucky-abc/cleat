@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/lucky-abc/cleat/logger"
+	"github.com/lucky-abc/cleat/metrics"
 	"github.com/lucky-abc/cleat/record"
 	"golang.org/x/text/encoding"
 	"io"
@@ -27,9 +28,11 @@ type DirReader struct {
 	decoder       *encoding.Decoder
 	readFlag      int32 //0:读取未执行，1：正在读取
 	waitGroup     sync.WaitGroup
+	readMeter     *metrics.Meter
+	fileNumMetric *metrics.Counter
 }
 
-func CreateDirReader(path string, charset string, ck *record.RecordPoint, queue chan string) *DirReader {
+func CreateDirReader(path string, charset string, ck *record.RecordPoint, queue chan string, metricRegistry *metrics.MetricRegistry) *DirReader {
 	r := &DirReader{
 		dirPath: path,
 		ck:      ck,
@@ -40,6 +43,13 @@ func CreateDirReader(path string, charset string, ck *record.RecordPoint, queue 
 	r.cancelFun = cancelf
 	decoder := NewMessageDecoder(charset)
 	r.decoder = decoder
+
+	readMeter := metrics.NewMeter("directoryread-rate")
+	fileNumMetric := metrics.NewCounter("directory-filenum")
+	metricRegistry.RegisterMetric(readMeter)
+	metricRegistry.RegisterMetric(fileNumMetric)
+	r.readMeter = readMeter
+	r.fileNumMetric = fileNumMetric
 	return r
 }
 
@@ -101,12 +111,14 @@ func (dr *DirReader) Read() {
 			file.Seek(int64(offset), 0)
 		}
 		reader := bufio.NewReader(file)
+		dr.fileNumMetric.Incr(1)
 		for {
 			line, err := reader.ReadBytes('\n')
 			if err != nil {
 				if err == io.EOF {
 					logger.Loggers().Infof("File read complete：%s", fileAbsPath)
 					file.Close()
+					dr.fileNumMetric.Decr(1)
 					if i < len(ffi)-1 {
 						dr.ck.DelCheckpoint(fmt.Sprintf(recordpointDirLogTemplate, fileAbsPath))
 					}
@@ -128,6 +140,7 @@ func (dr *DirReader) Read() {
 			for {
 				select {
 				case dr.queue <- msg:
+					dr.readMeter.Update(1)
 					dr.ck.SetCheckpoint(fmt.Sprintf(recordpointDirLogTemplate, fileAbsPath), offset)
 					break Lbl
 				case <-dr.cancelContext.Done():

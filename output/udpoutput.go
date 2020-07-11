@@ -3,6 +3,7 @@ package output
 import (
 	"fmt"
 	"github.com/lucky-abc/cleat/logger"
+	"github.com/lucky-abc/cleat/metrics"
 	"net"
 	"sync"
 )
@@ -13,15 +14,18 @@ type UDPOutput struct {
 	queue         chan string
 	udpConn       *net.UDPConn
 	waitGroup     sync.WaitGroup
+	sendMeter     *metrics.Meter
 }
 
-func NewUDPOutput(udpServer string, udpServerPort int, queue chan string) *UDPOutput {
+func NewUDPOutput(udpServer string, udpServerPort int, queue chan string, metricRegistry *metrics.MetricRegistry, tunnelName string) *UDPOutput {
 	output := &UDPOutput{
 		udpServer:     udpServer,
 		udpServerPort: udpServerPort,
 		queue:         queue,
 	}
-
+	sendMeter := metrics.NewMeter(tunnelName + "-updoutput-rate")
+	metricRegistry.RegisterMetric(sendMeter)
+	output.sendMeter = sendMeter
 	return output
 }
 
@@ -49,7 +53,9 @@ func (output *UDPOutput) Process() {
 		_, err := output.udpConn.Write([]byte(data))
 		if err != nil {
 			logger.Loggers().Error("upd send error：", err)
+			return
 		}
+		output.sendMeter.Update(1)
 	}
 }
 

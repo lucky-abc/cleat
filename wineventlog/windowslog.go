@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/beevik/etree"
 	"github.com/lucky-abc/cleat/logger"
+	"github.com/lucky-abc/cleat/metrics"
 	"github.com/lucky-abc/cleat/record"
 	"github.com/lucky-abc/cleat/wineventlog/wineventapi"
 	"github.com/pkg/errors"
@@ -40,9 +41,10 @@ type WindowsLog struct {
 	waitGroup     sync.WaitGroup
 	ck            *record.RecordPoint
 	runFlag       int32
+	metricMeter   *metrics.Meter
 }
 
-func NewWindowsLog(logName string, queue chan string, ck *record.RecordPoint) *WindowsLog {
+func NewWindowsLog(logName string, queue chan string, ck *record.RecordPoint, metricRegistry *metrics.MetricRegistry) *WindowsLog {
 	l := &WindowsLog{
 		LogName:   logName,
 		outputBuf: bytes.NewBuffer(make([]byte, 1<<14)),
@@ -51,9 +53,12 @@ func NewWindowsLog(logName string, queue chan string, ck *record.RecordPoint) *W
 		ck:        ck,
 		runFlag:   0,
 	}
+	metricMeter := metrics.NewMeter("windowevent-read-rate")
+	metricRegistry.RegisterMetric(metricMeter)
 	context, cancelf := context.WithCancel(context.Background())
 	l.cancelContext = context
 	l.cancelFun = cancelf
+	l.metricMeter = metricMeter
 	return l
 }
 
@@ -65,7 +70,6 @@ func (log *WindowsLog) Open() {
 		return
 	}
 	defer windows.CloseHandle(handle)
-	fmt.Println(handle)
 
 	q, err := syscall.UTF16PtrFromString("*")
 	if err != nil {
@@ -112,6 +116,7 @@ func (log *WindowsLog) Read() {
 	var numRead uint32
 	for {
 		err := wineventapi.EvtNext(log.eventHandle, uint32(len(eventHandles)), &eventHandles[0], 0, 0, &numRead)
+		time.Sleep(time.Second *2)
 		if atomic.LoadInt32(&log.runFlag) == 0 {
 			logger.Loggers().Info("window event read over")
 			return
@@ -119,7 +124,6 @@ func (log *WindowsLog) Read() {
 		if err != nil {
 			if err == ERROR_INVALID_OPERATION && numRead == 0 || err == ERROR_NO_MORE_ITEMS {
 				logger.Loggers().Warn("windows event has no more record, sleep a little")
-				time.Sleep(time.Second * 10)
 				continue
 			}
 			logger.Loggers().Errorf("windows event read next fail:%v", err)
@@ -172,6 +176,7 @@ func (log *WindowsLog) eventlogRender(eventHandles []uintptr) error {
 				return errors.New("window event close")
 			case log.queue <- xmlEvent:
 				log.RecordNumber = eventRecordID
+				log.metricMeter.Update(1)
 				log.ck.SetCheckpoint(fmt.Sprintf(checkpointTemplate, log.LogName), eventRecordID)
 				break lfor
 			}
