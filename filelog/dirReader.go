@@ -47,7 +47,7 @@ func CreateDirReader(path string, charset string, ck *record.RecordPoint, queue 
 
 	r.readMeter = metricRegistry.GetMeter("directoryread-rate")
 	r.fileNumMetric = metricRegistry.GetCounter("directory-filenum")
-	r.recorTotalMetric = metricRegistry.GetCounter("file-record-total")
+	r.recorTotalMetric = metricRegistry.GetCounter("filelog-record-total")
 	return r
 }
 

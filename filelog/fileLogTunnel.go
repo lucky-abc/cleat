@@ -1,7 +1,7 @@
 package filelog
 
 import (
-	"github.com/lucky-abc/cleat/config"
+	"github.com/lucky-abc/cleat/logger"
 	"github.com/lucky-abc/cleat/metrics"
 	"github.com/lucky-abc/cleat/output"
 	"github.com/lucky-abc/cleat/record"
@@ -24,9 +24,11 @@ func NewFilelogTunnel(ck *record.RecordPoint, metricRegistry *metrics.MetricRegi
 	metricRegistry.RegisterMetric(outputRecordTotalMetric)
 
 	s := NewFileLogSource(q, ck, metricRegistry)
-	udpServerIP := config.Config().GetString("output.udp.serverIP")
-	udpServerPort := config.Config().GetInt("output.udp.serverPort")
-	o := output.NewUDPOutput(udpServerIP, udpServerPort, q, metricRegistry, tunnelName)
+	o, err := output.BuildOutput(q, metricRegistry, tunnelName)
+	if err != nil {
+		logger.Loggers().Errorf("create output error: ", err)
+		return nil
+	}
 
 	tunnel := &FilelogTunnel{
 		queue: q,

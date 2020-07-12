@@ -1,7 +1,6 @@
 package wineventlog
 
 import (
-	"github.com/lucky-abc/cleat/config"
 	"github.com/lucky-abc/cleat/logger"
 	"github.com/lucky-abc/cleat/metrics"
 	"github.com/lucky-abc/cleat/output"
@@ -24,7 +23,6 @@ func NewWindowslogTunnel(ck *record.RecordPoint, metricRegistry *metrics.MetricR
 	}
 	var tunnelName = "windowevent"
 	q := make(chan string, 1024)
-
 	metricGauge := metrics.NewGauge("windowevent-channal-size", func() int64 {
 		return int64(len(q))
 	})
@@ -33,9 +31,11 @@ func NewWindowslogTunnel(ck *record.RecordPoint, metricRegistry *metrics.MetricR
 	metricRegistry.RegisterMetric(outputRecordTotalMetric)
 
 	winlogSource := NewWinLogSource(q, ck, metricRegistry)
-	udpServerIP := config.Config().GetString("output.udp.serverIP")
-	udpServerPort := config.Config().GetInt("output.udp.serverPort")
-	udpOutput := output.NewUDPOutput(udpServerIP, udpServerPort, q, metricRegistry, tunnelName)
+	udpOutput, err := output.BuildOutput(q, metricRegistry, tunnelName)
+	if err != nil {
+		logger.Loggers().Errorf("create output error: ", err)
+		return nil
+	}
 
 	tunnel := &WindowslogTunnel{
 		TunnelModel: tunnel.TunnelModel{

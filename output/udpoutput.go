@@ -18,13 +18,13 @@ type UDPOutput struct {
 	recordTotalMetric *metrics.Counter
 }
 
-func NewUDPOutput(udpServer string, udpServerPort int, queue chan string, metricRegistry *metrics.MetricRegistry, tunnelName string) *UDPOutput {
+func NewUDPOutput(udpConfig *UDPOutputConfig, queue chan string, metricRegistry *metrics.MetricRegistry, tunnelName string) *UDPOutput {
 	output := &UDPOutput{
-		udpServer:     udpServer,
-		udpServerPort: udpServerPort,
+		udpServer:     udpConfig.Server,
+		udpServerPort: udpConfig.ServerPort,
 		queue:         queue,
 	}
-	sendMeter := metrics.NewMeter(tunnelName + "-updoutput-rate")
+	sendMeter := metrics.NewMeter(tunnelName + "-udpoutput-rate")
 	metricRegistry.RegisterMetric(sendMeter)
 	output.sendMeter = sendMeter
 	output.recordTotalMetric = metricRegistry.GetCounter(tunnelName + "-output-record-total")

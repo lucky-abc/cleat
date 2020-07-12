@@ -63,7 +63,7 @@ func CreateFileLogReader(path string, charset string, ck *record.RecordPoint, qu
 	r.decoder = decoder
 
 	r.readMeter = metricRegistry.GetMeter("fileread-rate")
-	r.recorTotalMetric = metricRegistry.GetCounter("file-record-total")
+	r.recorTotalMetric = metricRegistry.GetCounter("filelog-record-total")
 	return r
 }
 

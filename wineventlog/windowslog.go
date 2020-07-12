@@ -124,8 +124,8 @@ func (log *WindowsLog) Read() {
 		}
 		if err != nil {
 			if err == ERROR_INVALID_OPERATION && numRead == 0 || err == ERROR_NO_MORE_ITEMS {
-				logger.Loggers().Warn("windows event has no more record, sleep a little")
-				time.Sleep(time.Second * 3)
+				logger.Loggers().Debug("windows event has no more record, sleep a little")
+				time.Sleep(time.Second * 8)
 				continue
 			}
 			logger.Loggers().Errorf("windows event read next fail:%v", err)
