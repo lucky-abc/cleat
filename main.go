@@ -54,7 +54,6 @@ func main() {
 
 func setupMetrics() *metrics.MetricRegistry {
 	metricRegistry := metrics.NewMetricRegstry()
-	logFileReporter := metrics.NewLogFileReporter(logger.Logger(), metricRegistry, 10)
 	bootTime := time.Now()
 	infoSheetMetric := metrics.NewInfoSheet("system_overview", func(infoValues *sync.Map) {
 		infoValues.Store("bootTime", bootTime.Format("2006-01-02 15:04:05.999"))
@@ -62,9 +61,45 @@ func setupMetrics() *metrics.MetricRegistry {
 	})
 	infoSheetMetric.AddInfo("OS", runtime.GOOS)
 	metricRegistry.RegisterMetric(infoSheetMetric)
-	metricRegistry.RegisterReporter(logFileReporter)
-	logFileReporter.Start()
+	setupMetricReport(metricRegistry)
 	return metricRegistry
+}
+
+func setupMetricReport(metricRegistry *metrics.MetricRegistry) {
+	reportersConfig, ok := config.Config().Get("metrics.reporters").([]interface{})
+	if !ok {
+		logger.Loggers().Info("there are no report config")
+		return
+	}
+	for _, reporterConfig := range reportersConfig {
+		rc, ok := reporterConfig.(map[interface{}]interface{})
+		if !ok {
+			logger.Loggers().Info("there are no report config")
+			continue
+		}
+		for k1, v1 := range rc {
+			if k1.(string) == "logfile" {
+				logfileConfig := v1.(map[interface{}]interface{})
+				if !ok {
+					logger.Loggers().Info("there are no report config")
+					break
+				}
+				var interval = ""
+				var level = ""
+				for k2, v2 := range logfileConfig {
+					switch k2.(string) {
+					case "reportInterval":
+						interval = v2.(string)
+					case "level":
+						level = v2.(string)
+					}
+				}
+				logFileReporter := metrics.NewLogFileReporter(logger.Logger(), level, metricRegistry, interval)
+				metricRegistry.RegisterReporter(logFileReporter)
+				logFileReporter.Start()
+			}
+		}
+	}
 }
 
 func getStartupPath() (appPath, configPath, dataPath, logPath string) {

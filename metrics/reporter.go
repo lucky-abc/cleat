@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"go.uber.org/zap"
 	"reflect"
-	"strconv"
+	"strings"
 	"time"
 )
 
@@ -20,10 +20,11 @@ type LogFileReporter struct {
 	logger         *zap.Logger
 	tiker          *time.Ticker
 	printBuffer    bytes.Buffer
+	logLevel       string
 }
 
-func NewLogFileReporter(logger *zap.Logger, mr *MetricRegistry, duration int) *LogFileReporter {
-	d, err := time.ParseDuration(strconv.Itoa(duration) + "s")
+func NewLogFileReporter(logger *zap.Logger, logLevel string, mr *MetricRegistry, duration string) *LogFileReporter {
+	d, err := time.ParseDuration(duration)
 	if err != nil {
 		return nil
 	}
@@ -31,6 +32,7 @@ func NewLogFileReporter(logger *zap.Logger, mr *MetricRegistry, duration int) *L
 		mr:             mr,
 		logger:         logger,
 		reportDuration: d,
+		logLevel:       logLevel,
 	}
 	return reporter
 }
@@ -47,6 +49,7 @@ func (lfr *LogFileReporter) Start() {
 
 func (lfr *LogFileReporter) report() {
 	metrics := lfr.mr.Metrics()
+	lfr.printBuffer.Reset()
 	for name, metric := range metrics {
 		metricType := reflect.ValueOf(metric).Elem().Type()
 		switch metricType.Name() {
@@ -60,8 +63,22 @@ func (lfr *LogFileReporter) report() {
 			lfr.reportInfoSheet(name, metric.(*InfoSheet))
 		}
 	}
-	lfr.logger.Info(lfr.printBuffer.String())
-	lfr.printBuffer.Reset()
+	switch strings.ToLower(lfr.logLevel) {
+	case "debug":
+		lfr.logger.Debug(lfr.printBuffer.String())
+	case "info":
+		lfr.logger.Info(lfr.printBuffer.String())
+	case "warn":
+		lfr.logger.Warn(lfr.printBuffer.String())
+	case "error":
+		lfr.logger.Error(lfr.printBuffer.String())
+	case "panic":
+		lfr.logger.Panic(lfr.printBuffer.String())
+	case "fatal":
+		lfr.logger.Fatal(lfr.printBuffer.String())
+	default:
+		lfr.logger.Error(lfr.printBuffer.String())
+	}
 }
 
 func (lfr *LogFileReporter) reportGauge(name string, metric *Gauge) {
